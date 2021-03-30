@@ -1,0 +1,172 @@
+** avrSLEEP [[https://github.com/ricardocosme/avrSLEEP/actions?query=workflow%3A%22demos%22][https://github.com/ricardocosme/avrSLEEP/actions?query=workflow%3A%22demos%22]]
+C++11 header-only facilities to use the power management and sleep modes of AVR.
+
+**** on/off [power down mode]
+
+#+BEGIN_SRC C++
+  using namespace avr::sleep;
+
+  power_down::on(); //enable the power-down mode
+  power_down::off(); //disable the power-down mode
+  sleep() //sleep instruction
+#+END_SRC
+
+**** sleep_for [power down mode]
+
+#+BEGIN_SRC C++
+#include <avr/io.hpp>
+#include <avr/sleep.hpp>
+
+using namespace avr::io;
+using namespace avr::sleep;
+
+/** We need to have one ISR to handle WDT interrupts because the MCU
+    wakes up through a WDT interrupt. */
+AVRINT_WDT(){}
+
+/** 
+    This demo illustrates the usage of power_down::sleep<Period>()
+    when Period is a timeout value that is equal to some WDT prescaler
+    value.
+    
+    The MCU sleeps for 1s using the power down mode and the watchdog
+    timer wakes it up using a watchdog timer interrupt.
+ */
+int main() {
+    Pb0 led{output};
+    led.low();
+    
+    while(true) {
+        /** Toggle the LED when the MCU wakes up. */
+        led.toggle();
+        
+        power_down::sleep_for<1_s>();
+        /** after wake up from the sleep the MCU returns to the
+            beginning of loop(next instruction). */
+    }
+}
+#+END_SRC
+
+The ~sleep_for~ function accepts any value that is a multiple to one of the prescalers of the watchdog timer(WDT). When the value isn't equal to any of the prescaler values available, a software counter of 8 or 16 bits is used in conjunction with the WDT. Take a look at [[file:demo/power_down_sleep_15min.cpp][demo/power_down_sleep_15min.cpp]] to see an example.
+
+The compiler chooses if the software counter will be necessary or not, and when it's needed the implementation try to use an 8 bits software counter with the best prescaler option calculated at compile-time, if the period can't be represented using 8 bits plus the greater possible prescaler, the compiler emits an error with a message informing that the programmer should try with a 16 bits counter.
+
+The period value is defined through a template parameter to allow some useful static asserts, for example, considering an ~ATmega328P~:
+
+#+BEGIN_SRC
+//compile error because 17ms isn't multiple of any prescaler value.
+power_down::sleep_for<130_ms>(); 
+
+//compile error using software counter with 8 bits because 
+//(period / best_prescaler > 255). The compiler message instructs the programmer to
+//define the macro AVR_SLEEP_WATCHDOG_COUNTER_RESOLUTION with the value 16.
+power_down::sleep_for<16384_ms>();
+
+//compile error using software counter with 16 bits because 
+//(period / best_prescaler > 65536).
+power_down::sleep_for<4194304_ms>();
+
+#+END_SRC
+
+*** API
+
+**** ~void sleep()~
+~sleep~ instruction.
+
+**** ~void power_down::on()~
+Enable the power down mode.
+
+**** ~void power_down::off()~
+Disable the power down mode.
+
+**** ~template<uint32_t Period> void power_down::sleep_for()~
+Sleep for a period of time. Put the MCU to sleep and wakes up after a specific period of time defined by 'Period'. One watchdog timer interrupt is used to wake up the MCU.
+
+It's necessary to have one ISR to handle the WDT interrupt because without that the MCU can execute the reset vector and the program will not return to the instruction after the sleep_for.
+
+The ~Period~ is a template parameter because the compiler do some static asserts to validate the period value.
+
+*** Supported microcontrollers
+1. ATtiny13A/13
+2. ATtiny25/45/85
+3. ATmega328P
+
+*** Requirements/Dependencies
+1. ~avr-gcc~ with at least ~-std=c++11~.
+2. [[https://github.com/ricardocosme/avrWDT][avrWDT]]
+
+*** Performance
+
+**** ~power_down::sleep_for<8_s>()~
+#+BEGIN_SRC C++
+void f() { power_down::sleep_for<8_s>(); }
+
+/*
+00000000 <_Z1fv>:
+  22:	9f b7       	in	r25, 0x3f	; 63
+  24:	f8 94       	cli
+  26:	a8 95       	wdr
+  28:	81 e6       	ldi	r24, 0x61	; 97
+  2a:	81 bd       	out	0x21, r24	; 33
+  2c:	78 94       	sei
+  2e:	85 b7       	in	r24, 0x35	; 53
+  30:	87 7c       	andi	r24, 0xC7	; 199
+  32:	80 63       	ori	r24, 0x30	; 48
+  34:	85 bf       	out	0x35, r24	; 53
+  36:	88 95       	sleep
+  38:	f8 94       	cli
+  3a:	a8 95       	wdr
+  3c:	84 b7       	in	r24, 0x34	; 52
+  3e:	87 7f       	andi	r24, 0xF7	; 247
+  40:	84 bf       	out	0x34, r24	; 52
+  42:	81 b5       	in	r24, 0x21	; 33
+  44:	88 61       	ori	r24, 0x18	; 24
+  46:	81 bd       	out	0x21, r24	; 33
+  48:	11 bc       	out	0x21, r1	; 33
+  4a:	9f bf       	out	0x3f, r25	; 63
+*/
+#+END_SRC
+~-std=c++11 -Os  -mmcu=attiny13a~
+
+**** ~power_down::sleep_for<15_min>()~
+In this case the implementation is using a software counter of 8 bits behind the scenes to achieve the requested period.
+
+#+BEGIN_SRC C++
+void f() { power_down::sleep_for<8_s>(); }
+
+/*
+00000000 <_Z1fv>:
+  22:	9f b7       	in	r25, 0x3f	; 63
+  24:	f8 94       	cli
+  26:	10 92 60 00 	sts	0x0060, r1	; 0x800060 <_ZN3avr5sleep12watchdog_cntE>
+  2a:	20 e6       	ldi	r18, 0x60	; 96
+  2c:	a8 95       	wdr
+  2e:	21 bd       	out	0x21, r18	; 33
+  30:	78 94       	sei
+  32:	85 b7       	in	r24, 0x35	; 53
+  34:	87 7c       	andi	r24, 0xC7	; 199
+  36:	80 63       	ori	r24, 0x30	; 48
+  38:	85 bf       	out	0x35, r24	; 53
+  3a:	88 95       	sleep
+  3c:	80 91 60 00 	lds	r24, 0x0060	; 0x800060 <_ZN3avr5sleep12watchdog_cntE>
+  40:	81 3e       	cpi	r24, 0xE1	; 225
+  42:	a0 f3       	brcs	.-24     	; 0x2c 
+  44:	f8 94       	cli
+  46:	a8 95       	wdr
+  48:	84 b7       	in	r24, 0x34	; 52
+  4a:	87 7f       	andi	r24, 0xF7	; 247
+  4c:	84 bf       	out	0x34, r24	; 52
+  4e:	81 b5       	in	r24, 0x21	; 33
+  50:	88 61       	ori	r24, 0x18	; 24
+  52:	81 bd       	out	0x21, r24	; 33
+  54:	11 bc       	out	0x21, r1	; 33
+  56:	9f bf       	out	0x3f, r25	; 63
+*/
+#+END_SRC
+~-std=c++11 -Os  -mmcu=attiny13a~
+
+*** TODO
+1. ~on/off~ to other sleep modes.
+
+*** Contributions
+Contributions are welcome, if you like what you see and you have interest to help, don't hesitate to open a PR(pull request), a issue or contact me through my email.
