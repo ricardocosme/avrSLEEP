@@ -165,7 +165,7 @@ void f() { power_down::sleep_for<8_s>(); }
 #+END_SRC
 ~-std=c++11 -Os  -mmcu=attiny13a~
 
-*** TODO
+*** [TODO]
 1. ~on/off~ to other sleep modes.
 
 *** Contributions
