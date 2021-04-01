@@ -44,5 +44,5 @@ jobs:
         run: docker build -t avr-gcc -f avrSLEEP/.github/workflows/Dockerfile .
 
       - name: Build demos
-        run: docker run -v $(pwd):/build -w/build avr-gcc make -B demo -C avrSLEEP
+        run: docker run -v $(pwd):/build -w/build avr-gcc make -B -C avrSLEEP/demo
         
