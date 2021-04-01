@@ -1,4 +1,4 @@
-** avrSLEEP [[https://github.com/ricardocosme/avrSLEEP/actions?query=workflow%3A%22demos%22][https://github.com/ricardocosme/avrSLEEP/actions?query=workflow%3A%22demos%22]]
+** avrSLEEP [[https://github.com/ricardocosme/avrSLEEP/actions?query=workflow%3A%22demos%22][https://github.com/ricardocosme/avrSLEEP/workflows/demos/badge.svg?branch=main]]
 C++11 header-only facilities to use the power management and sleep modes of AVR.
 
 **** on/off [power down mode]
