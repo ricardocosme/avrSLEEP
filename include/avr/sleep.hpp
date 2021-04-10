@@ -23,6 +23,14 @@ inline void on() { mcu::pwd::on(); }
 /** Disable the Power Down sleep mode. */
 inline void off() { mcu::pwd::off(); }
 
+/** Enable the power down sleep mode, sleeps and turn off the sleep
+    mode after wake up. */
+inline void sleep() {
+    on();
+    avr::sleep::sleep();
+    off();
+}
+
 /** Sleep for a period of time.
 
     Put the MCU to sleep and wakes up after a specific period of time
